@@ -1,11 +1,8 @@
-
 import time
-import json
 import requests
 import MySQLdb
 from functools import wraps
-from concurrent.futures import as_completed
-from concurrent.futures import ThreadPoolExecutor
+
 from bs4 import BeautifulSoup
 
 
@@ -90,7 +87,6 @@ def get_moive_info_url(page_url):
 def get_describ_by_url(page_url):
     html = get_html(page_url)
     soup = BeautifulSoup(html,"html.parser")
-
     describ_list =[]
     ol_node = soup.find('ol',class_ ='grid_view')
     quote_nodes =ol_node.find_all('div',class_='info')
@@ -103,39 +99,44 @@ def get_describ_by_url(page_url):
 
 
 def run_single_thread():
-    """
-    单线程爬取
-    :return:
-    """
-   # res_file = open('movie_data', 'w')
-    t1 = time.time()
+
     moive_url_lst = []
     #describ_lst短评
     describ_lst =[]
     page_url_lst = produce_url()
-
     # moive_url_lst 存储250个电影的详细url
     for page_url in page_url_lst:
         url_lst = get_moive_info_url(page_url)
         describ = get_describ_by_url(page_url)
         moive_url_lst.extend(url_lst)
         describ_lst.extend(describ)
-
-
+    k=1
     for url in moive_url_lst:
         response = requests.get(url)
         soup = BeautifulSoup(response.text,"html.parser")
         title =soup.find('span',property="v:itemreviewed").text
-        print(title)
-        time.sleep(100)
+        #详细信息
         article =""
+        article = article+"导演:"+soup.find('a',rel = "v:directedBy").text+"\n"
+        article = article + "编剧:" + soup.find('span', class_="attrs").text + "\n"
+        attrs =soup.find_all('span',class_="actor")
+        for att in attrs :
+            article = article +att.text
+        article +="\n"
+        article =article +"类型:"
+        for gener in soup.find_all('span',property="v:genre"):
+            article = article+gener.text+"/"
+        article +="\n"
+        article +="上映日期:"+soup.find('span',property="v:initialReleaseDate").text+"\n"
+        article +="片长:"+soup.find('span',property="v:runtime").text+"\n"
+        article +="IMDb链接:"+soup.find('a',target="_blank", rel="nofollow")['href']+"\n"
+        article +="剧情简介:" +soup.find('span', property="v:summary").text+"\n"
 
-
-   # res_file.close()
-    t2 = time.time()
-    print("耗时" + str(t2-t1))
-
-
+        sql = '''INSERT INTO movies(id,title, summary, content, label_img, cat_id,user_id,user_name,is_valid,created_at,updated_at) VALUES ("%s", "%s", "%s", "%s","%s", "%s", "%s", "%s", "%s", "%s", "%s")''' % \
+              (k, title, describ_lst[k-1], article,"标签图地址","0","564","lan17","1","1556003416","1556003416" )
+        cursor.execute(sql)
+        db.commit()
+        k+=1
 
 if __name__ == '__main__':
     db = MySQLdb.connect(host="localhost", user="root", passwd="root", db="blog", charset='utf8')
